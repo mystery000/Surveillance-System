@@ -6,6 +6,7 @@ import os
 import platform
 import ssl
 import cv2
+import aiohttp_cors
 
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
@@ -163,11 +164,19 @@ if __name__ == "__main__":
         ssl_context = None
 
     app = web.Application()
+    cors = aiohttp_cors.setup(app, defaults={
+        "*": aiohttp_cors.ResourceOptions(
+                allow_credentials=True,
+                expose_headers="*",
+                allow_headers="*",
+            )
+    })
+    
     app.on_shutdown.append(on_shutdown)
     app.router.add_get("/", index)
     app.router.add_get("/client.js", javascript)
-    app.router.add_post("/offer", offer)
-    app.router.add_get("/get_cameras", get_cameras)
+    cors.add(app.router.add_post("/offer", offer))
+    cors.add(app.router.add_get("/get_cameras", get_cameras))
     camera_list = enumerate_cameras()
     print(camera_list)
     web.run_app(app, host=args.host, port=args.port, ssl_context=ssl_context)
