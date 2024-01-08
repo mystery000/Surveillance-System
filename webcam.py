@@ -101,9 +101,6 @@ async def offer(request):
 
             del relay[camera]
 
-            
-            
-
     # open media source
     audio, video = create_local_tracks(
        camera, args.play_from, decode=not args.play_without_decoding
@@ -178,16 +175,10 @@ async def get_cameras(request):
         print(f"Task for Camera {key} Cancelled")
     running_tasks = {}
 
-
-    # for key in relay:
-    #     relay[key].stop_all()
-    #     print(f"Realy for Camera {key} Stopped")
     relay = {}
 
     camera_list = []
-    print("before enumerate")
     enumerate_cameras()
-    print("after enumerate")
 
     return web.json_response(camera_list)
 
