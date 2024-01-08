@@ -7,9 +7,14 @@ import platform
 import ssl
 import cv2
 import aiohttp_cors
+import psutil
+import time
+import signal
+from datetime import datetime
+import os
 
 from aiohttp import web
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCOutboundRtpStreamStats
 from aiortc.contrib.media import MediaPlayer, MediaRelay
 from aiortc.rtcrtpsender import RTCRtpSender
 
@@ -20,7 +25,12 @@ relay = {}
 webcam = {}
 
 camera_list = []
+running_tasks = {}
 
+pcs = {}
+
+def signal_handler(signum, frame):
+    raise TimeoutError
 
 def create_local_tracks(camera, play_from, decode):
     global relay, webcam
@@ -33,7 +43,7 @@ def create_local_tracks(camera, play_from, decode):
         if camera not in relay.keys():
             webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
             relay[camera] = MediaRelay()
-        return None, relay[camera].subscribe(webcam[camera].video)
+        return None, relay[camera].subscribe(webcam[camera].video, buffered=False)
 
 
 def force_codec(pc, sender, forced_codec):
@@ -57,19 +67,42 @@ async def javascript(request):
 
 async def offer(request):
     params = await request.json()
-    print(params)
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-    camera = params["camera"];
+    camera = params["camera"]
 
     pc = RTCPeerConnection()
-    pcs.add(pc)
+    pcs[camera] = pc
 
+    @pc.on("datachannel")
+    def on_datachannel(channel):
+        print("Data channel opened on the server")
+        # Start sending server information to the client
+        task = asyncio.create_task(send_server_info(pc, channel, camera))
+        running_tasks[camera] = task
+    
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
-        print("Connection state is %s" % pc.connectionState)
+        print("----------Connection state is %s" % pc.connectionState)
         if pc.connectionState == "failed":
-            await pc.close()
-            pcs.discard(pc)
+            running_tasks[camera].cancel()
+            del running_tasks[camera]
+
+            try:
+                await pcs[camera].close()
+                del pcs[camera]
+            except Exception as e:
+                pass
+
+            try:
+                webcam[camera].video.stop()
+                del webcam[camera]
+            except Exception as e:
+                pass
+
+            del relay[camera]
+
+            
+            
 
     # open media source
     audio, video = create_local_tracks(
@@ -102,15 +135,12 @@ async def offer(request):
         ),
     )
 
-
-pcs = set()
-
-
 async def on_shutdown(app):
+    global pcs
     # close peer connections
-    coros = [pc.close() for pc in pcs]
-    await asyncio.gather(*coros)
-    pcs.clear()
+    for key in pcs:
+        await pcs[key].close()
+    pcs = {}
 
 def enumerate_cameras():
     for i in range(50):
@@ -121,7 +151,96 @@ def enumerate_cameras():
     return camera_list
 
 async def get_cameras(request):
+    global pcs, running_tasks, relay, camera_list, webcam
+    # close peer connections
+
+    for key in webcam:
+        print(f"start stopping Camera {key}")
+        try:
+            signal.signal(signal.SIGALRM, signal_handler)
+            signal.alarm(3)
+            webcam[key].video.stop()
+            signal.pause()
+        except Exception as e:
+            print(e)
+            print(f"Timeout {key}")
+        print(f"Video Player for Camera {key} Stopped")
+    webcam = {}
+
+    for key in pcs:
+        print(f"PeerConnection start closing for Camera {key} Closed")
+        await pcs[key].close()
+        print(f"PeerConnection to Camera {key} Closed")
+    pcs = {}
+
+    for key in running_tasks:
+        running_tasks[key].cancel()
+        print(f"Task for Camera {key} Cancelled")
+    running_tasks = {}
+
+
+    # for key in relay:
+    #     relay[key].stop_all()
+    #     print(f"Realy for Camera {key} Stopped")
+    relay = {}
+
+    camera_list = []
+    print("before enumerate")
+    enumerate_cameras()
+    print("after enumerate")
+
     return web.json_response(camera_list)
+
+async def send_server_info(pc, data_channel, camera):
+    prev_bytes_sent = 0
+    prev_time = datetime.now()
+
+    while True:
+        try:
+            bitrate_kbps = 0
+            stats = await pc.getStats()
+            for test in stats:
+                stat = stats[test]
+                if isinstance(stat, RTCOutboundRtpStreamStats) and stat.kind == "video":
+                    # Find the stat with type "outbound-rtp" for video
+                    bytes_sent = stat.bytesSent
+                    # Calculate bitrate in bps
+                    # print("stat", stat.timestamp, stat.timestamp.timestamp())
+                    # print("prev", prev_time.timestamp, prev_time.timestamp())
+                    # print(camera, (bytes_sent - prev_bytes_sent), (stat.timestamp.timestamp() - prev_time.timestamp()))
+                    bitrate_bps = (bytes_sent - prev_bytes_sent) / (stat.timestamp.timestamp() - prev_time.timestamp())
+                    # Convert bitrate to kbps for easier reading
+                    bitrate_kbps = bitrate_bps * 8 / 1000
+
+                    # Update previous values for the next iteration
+                    prev_bytes_sent = stat.bytesSent
+                    prev_time = stat.timestamp
+
+                    break
+
+            load1, load5, load15 = psutil.getloadavg()
+            cpu_percent = (load15/os.cpu_count()) * 100
+
+            total_memory, used_memory, free_memory = map(
+            int, os.popen('free -t -m').readlines()[-1].split()[1:])
+            ram_percent =  round((used_memory/total_memory) * 100, 2)
+
+            # Create a JSON payload with the server information
+            server_info = {
+                "cpu_percent": cpu_percent,
+                "ram_percent": ram_percent,
+                "bitrate": bitrate_kbps,
+                "camera": camera
+            }
+
+            # Send the JSON payload to the client
+            data_channel.send(json.dumps(server_info))
+
+        except Exception as e:
+            print(e)
+            #  print(f"Error fetching bandwidth info: {str(e)}")
+        # Adjust the interval based on your requirements
+        await asyncio.sleep(5)  # Send data every 5 seconds (adjust as needed)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="WebRTC webcam demo")
