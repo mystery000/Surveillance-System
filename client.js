@@ -65,6 +65,23 @@ function start() {
                     }
                 }, 100);
 
+                setInterval(() => {
+                    pc.getStats(null).then(stats => {
+                        let statsOutput = "";
+                
+                        stats.forEach(report => {
+                            if (report.type === 'inbound-rtp') {
+                                if(report.kind === 'video') {
+                                    console.log("----", report.packetsLost);
+                                    statsOutput += `<strong>Packet Loss for video: </strong>${report.packetsLost}<br>\n`;
+                                }
+                            }
+                        });
+                        // display stats
+                        // document.querySelector('.stats-box').innerHTML = statsOutput;
+                    });
+                }, 1000);
+
                 document.getElementById(`video-${camera}`).srcObject = evt.streams[0];
             } else {
                 document.getElementById(`audio-${camera}`).srcObject = evt.streams[0];
