@@ -100,7 +100,7 @@ async def offer(request):
             if pc in peer_ips:
                 ips.remove(peer_ips[pc])
                 del peer_ips[pc]
-            if len(ips) == 0
+            if len(ips) == 0:
                 running_tasks[camera].cancel()
                 del running_tasks[camera]
 
