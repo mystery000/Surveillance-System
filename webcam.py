@@ -28,6 +28,8 @@ camera_list = []
 running_tasks = {}
 
 pcs = {}
+ips = []
+peer_ips = {}
 
 def signal_handler(signum, frame):
     raise TimeoutError
@@ -73,6 +75,17 @@ async def offer(request):
     pc = RTCPeerConnection()
     pcs[camera] = pc
 
+    @pc.on("icecandidate")
+    async def on_icecandidate(candidate):
+        if candidate:
+            candidate_info = candidate.__dict__
+            candidate_string = candidate_info.get('candidate', '')
+            candidate_parts = candidate_string.split(' ')
+            if len(candidate_parts) > 4:
+                ip_address = candidate_parts[4]
+                peer_ips[pc] = ip_address
+                print(f"Peer IP Address: {ip_address}")
+
     @pc.on("datachannel")
     def on_datachannel(channel):
         print("Data channel opened on the server")
@@ -84,22 +97,26 @@ async def offer(request):
     async def on_connectionstatechange():
         print("----------Connection state is %s" % pc.connectionState)
         if pc.connectionState == "failed":
-            running_tasks[camera].cancel()
-            del running_tasks[camera]
+            if pc in peer_ips:
+                ips.remove(peer_ips[pc])
+                del peer_ips[pc]
+            if len(ips) == 0
+                running_tasks[camera].cancel()
+                del running_tasks[camera]
 
-            try:
-                await pcs[camera].close()
-                del pcs[camera]
-            except Exception as e:
-                pass
+                try:
+                    await pcs[camera].close()
+                    del pcs[camera]
+                except Exception as e:
+                    pass
 
-            try:
-                webcam[camera].video.stop()
-                del webcam[camera]
-            except Exception as e:
-                pass
+                try:
+                    webcam[camera].video.stop()
+                    del webcam[camera]
+                except Exception as e:
+                    pass
 
-            del relay[camera]
+                del relay[camera]
 
     # open media source
     audio, video = create_local_tracks(
@@ -148,37 +165,39 @@ def enumerate_cameras():
     return camera_list
 
 async def get_cameras(request):
-    global pcs, running_tasks, relay, camera_list, webcam
-    # close peer connections
+    global pcs, running_tasks, relay, camera_list, webcam, ips
+    client_ip = request.remote_addr
+    if client_ip in ips:
+        # close peer connections
+        for key in webcam:
+            print(f"start stopping Camera {key}")
+            try:
+                signal.signal(signal.SIGALRM, signal_handler)
+                signal.alarm(3)
+                webcam[key].video.stop()
+                signal.pause()
+            except Exception as e:
+                print(e)
+                print(f"Timeout {key}")
+            print(f"Video Player for Camera {key} Stopped")
+        webcam = {}
 
-    for key in webcam:
-        print(f"start stopping Camera {key}")
-        try:
-            signal.signal(signal.SIGALRM, signal_handler)
-            signal.alarm(3)
-            webcam[key].video.stop()
-            signal.pause()
-        except Exception as e:
-            print(e)
-            print(f"Timeout {key}")
-        print(f"Video Player for Camera {key} Stopped")
-    webcam = {}
+        for key in pcs:
+            print(f"PeerConnection start closing for Camera {key} Closed")
+            await pcs[key].close()
+            print(f"PeerConnection to Camera {key} Closed")
+        pcs = {}
 
-    for key in pcs:
-        print(f"PeerConnection start closing for Camera {key} Closed")
-        await pcs[key].close()
-        print(f"PeerConnection to Camera {key} Closed")
-    pcs = {}
+        for key in running_tasks:
+            running_tasks[key].cancel()
+            print(f"Task for Camera {key} Cancelled")
+        running_tasks = {}
 
-    for key in running_tasks:
-        running_tasks[key].cancel()
-        print(f"Task for Camera {key} Cancelled")
-    running_tasks = {}
-
-    relay = {}
-
-    camera_list = []
-    enumerate_cameras()
+        relay = {}
+        camera_list = []
+        enumerate_cameras()
+    else:
+        ips.append(client_ip)
 
     return web.json_response(camera_list)
 
