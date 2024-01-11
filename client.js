@@ -72,7 +72,7 @@ function start() {
                         stats.forEach(report => {
                             if (report.type === 'inbound-rtp') {
                                 if(report.kind === 'video') {
-                                    console.log("----", report.packetsLost);
+                                    console.log(camera, "----", report.packetsLost);
                                     statsOutput += `<strong>Packet Loss for video: </strong>${report.packetsLost}<br>\n`;
                                 }
                             }
