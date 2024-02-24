@@ -36,12 +36,16 @@ def signal_handler(signum, frame):
 
 def create_local_tracks(camera, play_from, decode):
     global relay, webcam
-
+    print('Camerea')
+    print(camera)
     if play_from:
         player = MediaPlayer(play_from, decode=decode)
         return player.audio, player.video
     else:
         options = {"framerate": "15", "video_size": "640x480"}
+        if camera == '/dev/video4':
+            options = {"framerate": "15", "video_size": "800x600"}
+        
         if camera not in relay.keys():
             webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
             relay[camera] = MediaRelay()
@@ -166,7 +170,7 @@ def enumerate_cameras():
 
 async def get_cameras(request):
     global pcs, running_tasks, relay, camera_list, webcam, ips
-    client_ip = request.remote_addr
+    client_ip = request.remote
     if client_ip in ips:
         # close peer connections
         for key in webcam:
