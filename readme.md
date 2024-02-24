@@ -21,4 +21,6 @@ python3 webcam.py
 
 
 3. In client browser, connect {IP ADDRESS}:8080 and "Start" button.
-
+sudo service camera status
+sudo service camera start
+sudo service camera stop
