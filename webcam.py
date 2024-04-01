@@ -17,7 +17,6 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, RTCOutboundRtpStrea
 
 ROOT = os.path.dirname(__file__)
 
-device_name = "PI_1"
 relay, webcam  = {}, {}
 ips, camera_list = [], []
 running_tasks, pcs, peer_ips = {}, {}, {}
@@ -235,7 +234,7 @@ async def send_server_info(pc, data_channel, camera):
                 "ram_percent": ram_percent,
                 "bitrate": bitrate_kbps,
                 "camera": camera,
-                "device_name": device_name
+                "name": args.server_name
             }
 
             # Send the JSON payload to the client
@@ -272,6 +271,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--video-codec", help="Force a specific video codec (e.g. video/H264)"
+    )
+    parser.add_argument(
+        "--server-name", default="PI_1", help="Server name"
     )
 
     args = parser.parse_args()

@@ -97,7 +97,7 @@ function start() {
 
         dataChannel.addEventListener("message", function (event) {
             const data = JSON.parse(event.data);
-            document.getElementById(`bitrate-${data["device_name"]}-${data['camera']}`).textContent = data['bitrate'].toFixed(2) + " Kbps";
+            document.getElementById(`bitrate-${data["name"]}-${data['camera']}`).textContent = data['bitrate'].toFixed(2) + " Kbps";
             document.getElementById(`cpu_percent`).textContent = data['cpu_percent'].toFixed(2) + " %";
         })
         pcs[pi.name] = pc;
