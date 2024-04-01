@@ -1,0 +1,22 @@
+{
+    "pis": [
+        {
+            "name": "PI_1",
+            "ip": "172.29.10.1",
+            "port": 8080,
+            "camera": "/dev/video0"
+        },
+        {
+            "name": "PI_2",
+            "ip": "172.29.10.2",
+            "port": 8080,
+            "camera": "/dev/video0"
+        },
+        {
+            "name": "PI_3",
+            "ip": "172.29.10.3",
+            "port": 8080,
+            "camera": "/dev/video0"
+        }
+    ]
+}

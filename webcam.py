@@ -1,56 +1,48 @@
-import argparse
-import asyncio
-import json
-import logging
 import os
-import platform
 import ssl
 import cv2
-import aiohttp_cors
+import json
 import psutil
-import time
 import signal
+import asyncio
+import logging
+import argparse
+import aiohttp_cors
 from datetime import datetime
-import os
 
 from aiohttp import web
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCOutboundRtpStreamStats
-from aiortc.contrib.media import MediaPlayer, MediaRelay
 from aiortc.rtcrtpsender import RTCRtpSender
+from aiortc.contrib.media import MediaPlayer, MediaRelay
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCOutboundRtpStreamStats
 
 ROOT = os.path.dirname(__file__)
 
-
-relay = {}
-webcam = {}
-
-camera_list = []
-running_tasks = {}
-
-pcs = {}
-ips = []
-peer_ips = {}
+device_name = "PI_1"
+relay, webcam  = {}, {}
+ips, camera_list = [], []
+running_tasks, pcs, peer_ips = {}, {}, {}
 
 def signal_handler(signum, frame):
     raise TimeoutError
 
 def create_local_tracks(camera, play_from, decode):
     global relay, webcam
-    print('Camerea')
-    print(camera)
+    print('Camerea', camera)
+
     if play_from:
         player = MediaPlayer(play_from, decode=decode)
         return player.audio, player.video
     else:
         options = {"framerate": "15", "video_size": "640x480"}
+
         if camera == '/dev/video4':
             options = {"framerate": "15", "video_size": "800x600"}
         
         if camera not in relay.keys():
             webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
             relay[camera] = MediaRelay()
-        return None, relay[camera].subscribe(webcam[camera].video, buffered=False)
 
+        return None, relay[camera].subscribe(webcam[camera].video, buffered=False)
 
 def force_codec(pc, sender, forced_codec):
     kind = forced_codec.split("/")[0]
@@ -60,16 +52,17 @@ def force_codec(pc, sender, forced_codec):
         [codec for codec in codecs if codec.mimeType == forced_codec]
     )
 
-
 async def index(request):
     content = open(os.path.join(ROOT, "index.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
-
 
 async def javascript(request):
     content = open(os.path.join(ROOT, "client.js"), "r").read()
     return web.Response(content_type="application/javascript", text=content)
 
+async def config_json(request):
+    content = open(os.path.join(ROOT, "config.json"), "r").read()
+    return web.Response(content_type="application/json", text=content)
 
 async def offer(request):
     params = await request.json()
@@ -99,7 +92,7 @@ async def offer(request):
     
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
-        print("----------Connection state is %s" % pc.connectionState)
+        print("Connection state is %s" % pc.connectionState)
         if pc.connectionState == "failed":
             if pc in peer_ips:
                 ips.remove(peer_ips[pc])
@@ -142,7 +135,6 @@ async def offer(request):
             raise Exception("You must specify the video codec using --video-codec")
 
     await pc.setRemoteDescription(offer)
-
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
@@ -156,16 +148,14 @@ async def offer(request):
 async def on_shutdown(app):
     global pcs
     # close peer connections
-    for key in pcs:
-        await pcs[key].close()
+    for key in pcs: await pcs[key].close()
     pcs = {}
 
 def enumerate_cameras():
-    for i in range(50):
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            camera_list.append(f'/dev/video{i}')
-            cap.release()
+    cap = cv2.VideoCapture(0)
+    if cap.isOpened():
+        camera_list.append('/dev/video0')
+        cap.release()
     return camera_list
 
 async def get_cameras(request):
@@ -175,6 +165,7 @@ async def get_cameras(request):
         # close peer connections
         for key in webcam:
             print(f"start stopping Camera {key}")
+
             try:
                 signal.signal(signal.SIGALRM, signal_handler)
                 signal.alarm(3)
@@ -183,18 +174,22 @@ async def get_cameras(request):
             except Exception as e:
                 print(e)
                 print(f"Timeout {key}")
+
             print(f"Video Player for Camera {key} Stopped")
+
         webcam = {}
 
         for key in pcs:
             print(f"PeerConnection start closing for Camera {key} Closed")
             await pcs[key].close()
             print(f"PeerConnection to Camera {key} Closed")
+
         pcs = {}
 
         for key in running_tasks:
             running_tasks[key].cancel()
             print(f"Task for Camera {key} Cancelled")
+
         running_tasks = {}
 
         relay = {}
@@ -219,21 +214,16 @@ async def send_server_info(pc, data_channel, camera):
                     # Find the stat with type "outbound-rtp" for video
                     bytes_sent = stat.bytesSent
                     # Calculate bitrate in bps
-                    # print("stat", stat.timestamp, stat.timestamp.timestamp())
-                    # print("prev", prev_time.timestamp, prev_time.timestamp())
-                    # print(camera, (bytes_sent - prev_bytes_sent), (stat.timestamp.timestamp() - prev_time.timestamp()))
                     bitrate_bps = (bytes_sent - prev_bytes_sent) / (stat.timestamp.timestamp() - prev_time.timestamp())
                     # Convert bitrate to kbps for easier reading
                     bitrate_kbps = bitrate_bps * 8 / 1000
-
                     # Update previous values for the next iteration
                     prev_bytes_sent = stat.bytesSent
                     prev_time = stat.timestamp
-
                     break
 
             load1, load5, load15 = psutil.getloadavg()
-            cpu_percent = (load15/os.cpu_count()) * 100
+            cpu_percent = (load15 / os.cpu_count()) * 100
 
             total_memory, used_memory, free_memory = map(
             int, os.popen('free -t -m').readlines()[-1].split()[1:])
@@ -244,15 +234,16 @@ async def send_server_info(pc, data_channel, camera):
                 "cpu_percent": cpu_percent,
                 "ram_percent": ram_percent,
                 "bitrate": bitrate_kbps,
-                "camera": camera
+                "camera": camera,
+                "device_name": device_name
             }
 
             # Send the JSON payload to the client
             data_channel.send(json.dumps(server_info))
 
         except Exception as e:
-            print(e)
-            #  print(f"Error fetching bandwidth info: {str(e)}")
+             print(f"Error fetching bandwidth info: {str(e)}")
+
         # Adjust the interval based on your requirements
         await asyncio.sleep(5)  # Send data every 5 seconds (adjust as needed)
 
@@ -308,6 +299,7 @@ if __name__ == "__main__":
     app.on_shutdown.append(on_shutdown)
     app.router.add_get("/", index)
     app.router.add_get("/client.js", javascript)
+    app.router.add_get("/config.json", config_json)
     cors.add(app.router.add_post("/offer", offer))
     cors.add(app.router.add_get("/get_cameras", get_cameras))
     camera_list = enumerate_cameras()
