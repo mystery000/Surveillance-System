@@ -64,7 +64,7 @@ function start() {
                 setInterval(() => {
                     const { width, height, frameRate } = videoTrack.getSettings();
                     if (width && height && frameRate) {
-                        updateResolutionAndFPS(videoTrack, pi.camera);
+                        updateResolutionAndFPS(videoTrack, pi);
                     }
                 }, 100);
 
@@ -75,7 +75,7 @@ function start() {
                         stats.forEach(report => {
                             if (report.type === 'inbound-rtp') {
                                 if(report.kind === 'video') {
-                                    console.log(pi.name, pi.camera, "----", report.packetsLost);
+                                    // console.log(pi.name, pi.camera, "----", report.packetsLost);
                                     statsOutput += `<strong>Packet Loss for video: </strong>${report.packetsLost}<br>\n`;
                                 }
                             }
