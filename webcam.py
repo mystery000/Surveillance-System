@@ -1,15 +1,17 @@
 import os
 import ssl
+import cv2
 import json
+import aiortc
 import asyncio
 import logging
 import argparse
+import numpy as np
 import aiohttp_cors
-
 from aiohttp import web
 from aiortc.rtcrtpsender import RTCRtpSender
 from aiortc.contrib.media import MediaPlayer, MediaRelay
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 
 ROOT = os.path.dirname(__file__)
 
@@ -52,6 +54,40 @@ async def config_json(request):
     content = open(os.path.join(ROOT, "config.json"), "r").read()
     return web.Response(content_type="application/json", text=content)
 
+
+class VideoStream(VideoStreamTrack):
+    def __init__(self, camera):
+        super().__init__()
+        self.camera = camera
+
+    async def recv(self):
+        video_frame = await self.camera.get_frame()
+        pts, time_base = await self.next_timestamp()
+
+        # Create a VideoFrame object directly from the OpenCV frame
+        frame = aiortc.av.VideoFrame.from_ndarray(video_frame, format='rgb24')
+        frame.pts = pts
+        frame.time_base = time_base
+
+        return frame
+
+class Camera:
+    def __init__(self):
+        self.video_capture = cv2.VideoCapture(0)
+        self.video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    async def get_frame(self):
+        success, frame = self.video_capture.read()
+        if not success:
+            raise RuntimeError("Failed to read frame from camera")
+
+        # Convert the frame to RGB format
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # Return the frame as a numpy array
+        return frame_rgb
+    
 async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
@@ -68,24 +104,29 @@ async def offer(request):
         if pc.connectionState == "closed":
             pcs.discard(pc)
 
+    camera = Camera()
+    video_track = VideoStream(camera)
+    pc.addTrack(video_track)
+
     # open media source
-    audio, video = create_local_tracks(
-       args.play_from, decode=not args.play_without_decoding
-    )
+    # audio, video = create_local_tracks(
+    #    args.play_from, decode=not args.play_without_decoding
+    # )
 
-    if audio:
-        audio_sender = pc.addTrack(audio)
-        if args.audio_codec:
-            force_codec(pc, audio_sender, args.audio_codec)
-        elif args.play_without_decoding:
-            raise Exception("You must specify the audio codec using --audio-codec")
+    # if audio:
+    #     audio_sender = pc.addTrack(audio)
+    #     if args.audio_codec:
+    #         force_codec(pc, audio_sender, args.audio_codec)
+    #     elif args.play_without_decoding:
+    #         raise Exception("You must specify the audio codec using --audio-codec")
 
-    if video:
-        video_sender = pc.addTrack(video)
-        if args.video_codec:
-            force_codec(pc, video_sender, args.video_codec)
-        elif args.play_without_decoding:
-            raise Exception("You must specify the video codec using --video-codec")
+    # if video:
+    #     video_sender = pc.addTrack(video)
+    #     if args.video_codec:
+    #         force_codec(pc, video_sender, args.video_codec)
+    #     elif args.play_without_decoding:
+    #         raise Exception("You must specify the video codec using --video-codec")
+    
 
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
