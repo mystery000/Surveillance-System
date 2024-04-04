@@ -1,22 +1,19 @@
 {
     "pis": [
         {
-            "name": "PI_1",
-            "ip": "172.29.10.1",
-            "port": 8080,
-            "camera": "/dev/video0"
+            "name": "RaspberryPi1",
+            "ip": "192.168.50.128",
+            "port": 8080
         },
         {
-            "name": "PI_2",
-            "ip": "172.29.10.2",
-            "port": 8080,
-            "camera": "/dev/video0"
+            "name": "RaspberryPi2",
+            "ip": "192.168.50.128",
+            "port": 8081
         },
         {
-            "name": "PI_3",
-            "ip": "172.29.10.3",
-            "port": 8080,
-            "camera": "/dev/video0"
+            "name": "RaspberryPi3",
+            "ip": "192.168.50.128",
+            "port": 8082
         }
     ]
 }

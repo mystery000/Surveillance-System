@@ -24,3 +24,6 @@ python3 webcam.py
 sudo service camera status
 sudo service camera start
 sudo service camera stop
+
+# How to force stop the process 
+kill -9 $(ps -A | grep python | awk '{print $1}')

@@ -6,8 +6,7 @@ function negotiate(pi) {
     pcs[pi.name].addTransceiver('audio', { direction: 'recvonly' });
 
     return pcs[pi.name].createOffer().then(function (offer) {
-        camera = pi.camera
-        return pcs[pi.name].setLocalDescription({ ...offer, camera });
+        return pcs[pi.name].setLocalDescription(offer);
     }).then(function () {
         // wait for ICE gathering to complete
         return new Promise(function (resolve) {
@@ -29,7 +28,6 @@ function negotiate(pi) {
             body: JSON.stringify({
                 sdp: offer.sdp,
                 type: offer.type,
-                camera: pi.camera
             }),
             headers: {
                 'Content-Type': 'application/json'
@@ -53,53 +51,19 @@ function start() {
     if (document.getElementById('use-stun').checked) {
         config.iceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
     }
+
     pis.map((pi) => {
         pc = new RTCPeerConnection(config);
+
         // connect audio / video
         pc.addEventListener('track', function (evt) {
             if (evt.track.kind == 'video') {
-                const stream = evt.streams[0];
-                const videoTrack = stream.getVideoTracks()[0];
-                // Use setInterval to periodically check the video track's settings
-                setInterval(() => {
-                    const { width, height, frameRate } = videoTrack.getSettings();
-                    if (width && height && frameRate) {
-                        updateResolutionAndFPS(videoTrack, pi);
-                    }
-                }, 100);
-
-                setInterval(() => {
-                    pc.getStats(null).then(stats => {
-                        let statsOutput = "";
-                
-                        stats.forEach(report => {
-                            if (report.type === 'inbound-rtp') {
-                                if(report.kind === 'video') {
-                                    // console.log(pi.name, pi.camera, "----", report.packetsLost);
-                                    statsOutput += `<strong>Packet Loss for video: </strong>${report.packetsLost}<br>\n`;
-                                }
-                            }
-                        });
-                    });
-                }, 1000);
-
-                document.getElementById(`video-${pi.name}-${pi.camera}`).srcObject = evt.streams[0];
+                document.getElementById(`video-${pi.name}`).srcObject = evt.streams[0];
             } else {
-                document.getElementById(`audio-${pi.name}-${pi.camera}`).srcObject = evt.streams[0];
+                document.getElementById(`audio-${pi.name}`).srcObject = evt.streams[0];
             }
         });
 
-        const dataChannel = pc.createDataChannel("camera-status");
-
-        dataChannel.onopen = () => {
-            dataChannel.send("Hello, server!");
-        };
-
-        dataChannel.addEventListener("message", function (event) {
-            const data = JSON.parse(event.data);
-            document.getElementById(`bitrate-${data["name"]}-${data['camera']}`).textContent = data['bitrate'].toFixed(2) + " Kbps";
-            document.getElementById(`cpu_percent`).textContent = data['cpu_percent'].toFixed(2) + " %";
-        })
         pcs[pi.name] = pc;
         negotiate(pi);
     })
@@ -108,24 +72,18 @@ function start() {
     document.getElementById('stop').style.display = 'inline-block';
 }
 
-const updateResolutionAndFPS = (videoTrack, pi) => {
-    document.getElementById(`resolution-${pi.name}-${pi.camera}`).textContent = videoTrack.getSettings().width + "x" + videoTrack.getSettings().height;
-    document.getElementById(`fps-${pi.name}-${pi.camera}`).textContent = videoTrack.getSettings().frameRate.toFixed(2);
-};
-
 function stop() {
     document.getElementById('stop').style.display = 'none';
 
     // close peer connection
     setTimeout(function () {
         Object.values(pcs).map((pc) => pc.close());
-    }, 500);
+    }, 100);
 }
 
 setInterval(() => {
     currentTime = Date.now();
-    const test = currentTime;
-    document.querySelector("#test").textContent = test;
+    document.querySelector("#test").textContent = currentTime;
 }, (1));
 
 (function () {
@@ -147,28 +105,16 @@ setInterval(() => {
                 headerDivDom.classList.add("header-div")
         
                 const h1Dom = document.createElement("h1");
-                h1Dom.textContent = `${pi.name}${pi.camera}`;
-        
-                const fpsDom = document.createElement("span");
-                fpsDom.setAttribute("id", `fps-${pi.name}-${pi.camera}`);
-        
-                const bitrateDom = document.createElement("span");
-                bitrateDom.setAttribute("id", `bitrate-${pi.name}-${pi.camera}`);
-        
-                const resolutionDom = document.createElement("span");
-                resolutionDom.setAttribute("id", `resolution-${pi.name}-${pi.camera}`);
+                h1Dom.textContent = `${pi.name}`;
         
                 headerDivDom.append(h1Dom);
-                headerDivDom.append(fpsDom);
-                headerDivDom.append(resolutionDom);
-                headerDivDom.append(bitrateDom);
         
                 const videoDom = document.createElement("video");
-                videoDom.setAttribute("id", `video-${pi.name}-${pi.camera}`);
+                videoDom.setAttribute("id", `video-${pi.name}`);
                 videoDom.setAttribute("autoplay", true);
                 videoDom.setAttribute("playsinline", true);
                 const audioDom = document.createElement("audio");
-                audioDom.setAttribute("id", `audio-${pi.name}-${pi.camera}`);
+                audioDom.setAttribute("id", `audio-${pi.name}`);
         
                 divDom.append(headerDivDom);
                 divDom.append(videoDom);
