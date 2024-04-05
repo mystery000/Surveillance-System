@@ -36,7 +36,8 @@ def create_local_tracks(camera, play_from, decode):
 
         if camera not in relay.keys():
             # webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
-            webcam[camera] = MediaPlayer('./movie.mp4')
+            webcam[camera] = MediaPlayer(
+            'http://download.tsi.telecom-paristech.fr/gpac/dataset/dash/uhd/mux_sources/hevcds_720p30_2M.mp4')
             relay[camera] = MediaRelay()
 
         return None, relay[camera].subscribe(webcam[camera].video, buffered=True)
