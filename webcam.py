@@ -89,27 +89,27 @@ async def offer(request):
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
         print("Connection state is %s" % pc.connectionState)
-        if pc.connectionState == "failed":
-            if pc in peer_ips:
-                ips.remove(peer_ips[pc])
-                del peer_ips[pc]
-            if len(ips) == 0:
-                running_tasks[camera].cancel()
-                del running_tasks[camera]
+        # if pc.connectionState == "failed":
+        #     if pc in peer_ips:
+        #         ips.remove(peer_ips[pc])
+        #         del peer_ips[pc]
+        #     if len(ips) == 0:
+        #         running_tasks[camera].cancel()
+        #         del running_tasks[camera]
 
-                try:
-                    await pcs[camera].close()
-                    del pcs[camera]
-                except Exception as e:
-                    pass
+        #         try:
+        #             await pcs[camera].close()
+        #             del pcs[camera]
+        #         except Exception as e:
+        #             pass
 
-                try:
-                    webcam[camera].video.stop()
-                    del webcam[camera]
-                except Exception as e:
-                    pass
+        #         try:
+        #             webcam[camera].video.stop()
+        #             del webcam[camera]
+        #         except Exception as e:
+        #             pass
 
-                del relay[camera]
+        #         del relay[camera]
 
     # open media source
     audio, video = create_local_tracks(
