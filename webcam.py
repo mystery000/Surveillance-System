@@ -35,7 +35,9 @@ def create_local_tracks(camera, play_from, decode):
         options = {"framerate": "30", "video_size": "640x480"}
 
         if camera not in relay.keys():
-            webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
+            # webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
+            webcam[camera] = MediaPlayer(
+            'http://download.tsi.telecom-paristech.fr/gpac/dataset/dash/uhd/mux_sources/hevcds_720p30_2M.mp4')
             relay[camera] = MediaRelay()
 
         return None, relay[camera].subscribe(webcam[camera].video, buffered=True)
@@ -146,7 +148,7 @@ async def on_shutdown(app):
     # close peer connections
     for key in pcs: await pcs[key].close()
     pcs = {}
-    os._exit()
+    os._exit(0)
 
 def enumerate_cameras():
     cap = cv2.VideoCapture(0)
