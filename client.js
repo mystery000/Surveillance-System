@@ -44,7 +44,6 @@ function negotiate(pi) {
         alert(e);
     });
 }
-
 function start() {
     var config = {
         sdpSemantics: 'unified-plan'
@@ -68,16 +67,27 @@ function start() {
                     }
                 }, 100);
 
+                // setInterval(() => {
+                //     pc.getStats(null).then(stats => {
+                //         let statsOutput = "";
+                
+                //         stats.forEach(report => {
+                //             if (report.type === 'inbound-rtp') {
+                //                 if(report.kind === 'video') {
+                //                     console.log(pi.name, pi.camera, "----", report.packetsLost);
+                //                     statsOutput += `<strong>Packet Loss for video: </strong>${report.packetsLost}<br>\n`;
+                //                 }
+                //             }
+                //         });
+                //     });
+                // }, 1000);
+
                 setInterval(() => {
                     pc.getStats(null).then(stats => {
-                        let statsOutput = "";
-                
                         stats.forEach(report => {
-                            if (report.type === 'inbound-rtp') {
-                                if(report.kind === 'video') {
-                                    // console.log(pi.name, pi.camera, "----", report.packetsLost);
-                                    statsOutput += `<strong>Packet Loss for video: </strong>${report.packetsLost}<br>\n`;
-                                }
+
+                            if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                                console.log(`[${pi.name}-${pi.camera}] Packet Loss for video: ${report.packetsLost}`);
                             }
                         });
                     });

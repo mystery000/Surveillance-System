@@ -32,16 +32,13 @@ def create_local_tracks(camera, play_from, decode):
         player = MediaPlayer(play_from, decode=decode)
         return player.audio, player.video
     else:
-        options = {"framerate": "15", "video_size": "640x480"}
+        options = {"framerate": "30", "video_size": "640x480"}
 
-        if camera == '/dev/video4':
-            options = {"framerate": "15", "video_size": "800x600"}
-        
         if camera not in relay.keys():
             webcam[camera] = MediaPlayer(camera, format="v4l2", options=options)
             relay[camera] = MediaRelay()
 
-        return None, relay[camera].subscribe(webcam[camera].video, buffered=False)
+        return None, relay[camera].subscribe(webcam[camera].video, buffered=True)
 
 def force_codec(pc, sender, forced_codec):
     kind = forced_codec.split("/")[0]
@@ -149,6 +146,7 @@ async def on_shutdown(app):
     # close peer connections
     for key in pcs: await pcs[key].close()
     pcs = {}
+    os._exit()
 
 def enumerate_cameras():
     cap = cv2.VideoCapture(0)
